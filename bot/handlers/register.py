@@ -1,14 +1,11 @@
 """
-Registration conversation handler.
+Registration conversation — creates or updates user profile.
 
-Flow:
-  /register
-    → ask full name
-    → ask university ID
-    → ask department
-    → ask remaining credit hours
-    → ask for signature image (skippable)
-    → confirm & save
+Entry points:
+  /register, /edit commands
+  cb_start_register, cb_edit inline buttons
+
+Steps: الاسم → الرقم الجامعي → القسم → الساعات → التوقيع (اختياري)
 """
 
 import os
@@ -25,19 +22,27 @@ from telegram.ext import (
 from bot.database.db import get_db
 from bot.database.models import User
 from bot.config import GENERATED_PDF_DIR
+from bot.utils import arabic_to_western, main_menu_keyboard
 
-# Conversation states
 REG_NAME, REG_UNI_ID, REG_DEPT, REG_HOURS, REG_SIG = range(5)
 
-_CANCEL_TEXT = "❌ Registration cancelled. Use /register to start again."
-_SKIP_KB = InlineKeyboardMarkup([[InlineKeyboardButton("⏭ Skip", callback_data="skip_sig")]])
+_SKIP_KB = InlineKeyboardMarkup([
+    [InlineKeyboardButton("⏭ تخطي", callback_data="skip_sig")]
+])
 
 
 async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text(
-        "📝 *Registration*\n\n"
-        "Step 1/5 — Enter your *full name* as it appears on university records:",
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        send = update.callback_query.message.reply_text
+    else:
+        send = update.message.reply_text
+
+    await send(
+        "📝 *التسجيل — الخطوة 1 من 5*\n\n"
+        "أدخل *اسمك الكامل* كما يظهر في السجلات الجامعية:",
         parse_mode="Markdown",
     )
     return REG_NAME
@@ -46,17 +51,16 @@ async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def reg_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["full_name"] = update.message.text.strip()
     await update.message.reply_text(
-        "Step 2/5 — Enter your *university ID number*:",
+        "📝 *الخطوة 2 من 5*\n\nأدخل *رقمك الجامعي:*",
         parse_mode="Markdown",
     )
     return REG_UNI_ID
 
 
 async def reg_uni_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["university_id"] = update.message.text.strip()
+    context.user_data["university_id"] = arabic_to_western(update.message.text.strip())
     await update.message.reply_text(
-        "Step 3/5 — Enter your *department name*:\n"
-        "_e.g. Computer Science, Information Technology_",
+        "📝 *الخطوة 3 من 5*\n\nأدخل *اسم قسمك:*\n_مثال: علوم الحاسب، تقنية المعلومات_",
         parse_mode="Markdown",
     )
     return REG_DEPT
@@ -65,22 +69,26 @@ async def reg_uni_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def reg_dept(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data["department"] = update.message.text.strip()
     await update.message.reply_text(
-        "Step 4/5 — How many *credit hours* remain until graduation (assuming you pass all current courses)?",
+        "📝 *الخطوة 4 من 5*\n\nكم *ساعة دراسية* متبقية لتخرجك بافتراض النجاح؟",
         parse_mode="Markdown",
     )
     return REG_HOURS
 
 
 async def reg_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    hours = update.message.text.strip()
-    if not hours.isdigit():
-        await update.message.reply_text("Please enter a *number* only (e.g. 45):", parse_mode="Markdown")
+    raw = arabic_to_western(update.message.text.strip())
+    if not raw.isdigit():
+        await update.message.reply_text(
+            "⚠️ الرجاء إدخال *رقم فقط* مثل: 42",
+            parse_mode="Markdown",
+        )
         return REG_HOURS
 
-    context.user_data["remaining_hours"] = hours
+    context.user_data["remaining_hours"] = raw
     await update.message.reply_text(
-        "Step 5/5 — *Optional:* Send a photo of your signature to embed in the form.\n\n"
-        "Or tap *Skip* to use your name as signature text.",
+        "📝 *الخطوة 5 من 5 — اختياري*\n\n"
+        "أرسل *صورة توقيعك* لإدراجها في النموذج،\n"
+        "أو اضغط *تخطي* لاستخدام اسمك كتوقيع نصي.",
         parse_mode="Markdown",
         reply_markup=_SKIP_KB,
     )
@@ -88,7 +96,7 @@ async def reg_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def reg_sig_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    photo = update.message.photo[-1]  # highest resolution
+    photo = update.message.photo[-1]
     sig_dir = os.path.join(GENERATED_PDF_DIR, "signatures")
     os.makedirs(sig_dir, exist_ok=True)
 
@@ -96,14 +104,14 @@ async def reg_sig_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     sig_path = os.path.join(sig_dir, f"{tg_id}_sig.jpg")
     file = await context.bot.get_file(photo.file_id)
     await file.download_to_drive(sig_path)
-
     context.user_data["signature_path"] = sig_path
+
     return await _save_user(update, context)
 
 
 async def reg_sig_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["signature_path"] = None
     await update.callback_query.answer()
+    context.user_data["signature_path"] = None
     return await _save_user(update, context, via_callback=True)
 
 
@@ -113,23 +121,23 @@ async def _save_user(
     via_callback: bool = False,
 ) -> int:
     tg_id = update.effective_user.id
-    tg_username = update.effective_user.username
     d = context.user_data
 
     with get_db() as db:
         user = db.query(User).filter(User.telegram_id == tg_id).first()
         if user:
-            user.telegram_username = tg_username
+            user.telegram_username = update.effective_user.username
             user.full_name = d["full_name"]
             user.university_id = d["university_id"]
             user.department = d["department"]
             user.remaining_hours = d["remaining_hours"]
-            user.signature_path = d.get("signature_path")
-            action = "updated"
+            if d.get("signature_path") is not None:
+                user.signature_path = d["signature_path"]
+            verb = "تحديث"
         else:
             user = User(
                 telegram_id=tg_id,
-                telegram_username=tg_username,
+                telegram_username=update.effective_user.username,
                 full_name=d["full_name"],
                 university_id=d["university_id"],
                 department=d["department"],
@@ -137,21 +145,30 @@ async def _save_user(
                 signature_path=d.get("signature_path"),
             )
             db.add(user)
-            action = "saved"
+            verb = "حفظ"
 
-    msg = (
-        f"✅ *Profile {action} successfully!*\n\n"
-        f"Name: {d['full_name']}\n"
-        f"University ID: {d['university_id']}\n"
-        f"Department: {d['department']}\n"
-        f"Remaining Hours: {d['remaining_hours']}\n\n"
-        "Use /request whenever you need a training letter."
+    success_msg = (
+        f"✅ *تم {verb} بياناتك بنجاح!*\n\n"
+        f"الاسم: {d['full_name']}\n"
+        f"الرقم الجامعي: `{d['university_id']}`\n"
+        f"القسم: {d['department']}\n"
+        f"الساعات المتبقية: {d['remaining_hours']}\n\n"
+        "يمكنك الآن إنشاء طلب تدريب من القائمة 👇"
     )
 
     if via_callback:
-        await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
+        await update.callback_query.edit_message_text(
+            success_msg, parse_mode="Markdown",
+        )
+        await update.callback_query.message.reply_text(
+            "اختر ما تريد:", reply_markup=main_menu_keyboard(),
+        )
     else:
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await update.message.reply_text(
+            success_msg,
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(),
+        )
 
     context.user_data.clear()
     return ConversationHandler.END
@@ -159,20 +176,24 @@ async def _save_user(
 
 async def reg_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
-    await update.message.reply_text(_CANCEL_TEXT)
+    await update.message.reply_text(
+        "❌ تم إلغاء التسجيل. استخدم /register للبدء من جديد.",
+        reply_markup=main_menu_keyboard(),
+    )
     return ConversationHandler.END
 
 
 register_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler("register", register_start),
-        CallbackQueryHandler(register_start, pattern="^start_register$"),
+        CommandHandler("edit",     register_start),
+        CallbackQueryHandler(register_start, pattern="^(cb_start_register|cb_edit)$"),
     ],
     states={
-        REG_NAME:  [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name)],
-        REG_UNI_ID:[MessageHandler(filters.TEXT & ~filters.COMMAND, reg_uni_id)],
-        REG_DEPT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_dept)],
-        REG_HOURS: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_hours)],
+        REG_NAME:   [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name)],
+        REG_UNI_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_uni_id)],
+        REG_DEPT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_dept)],
+        REG_HOURS:  [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_hours)],
         REG_SIG: [
             MessageHandler(filters.PHOTO, reg_sig_photo),
             CallbackQueryHandler(reg_sig_skip, pattern="^skip_sig$"),
