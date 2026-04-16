@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system deps (curl for font download)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (layer cache)
