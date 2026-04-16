@@ -1,0 +1,40 @@
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+from contextlib import contextmanager
+from typing import Generator
+
+from bot.config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
+from bot.database.models import Base
+
+DATABASE_URL = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    "?charset=utf8mb4"
+)
+
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,       # detect stale connections
+    pool_recycle=3600,        # recycle connections every hour
+    pool_size=5,
+    max_overflow=10,
+    echo=False,
+)
+
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
+
+
+@contextmanager
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

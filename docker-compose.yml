@@ -1,0 +1,11 @@
+services:
+  bot:
+    build: .
+    container_name: training_form_bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data          # persist generated PDFs and signatures
+    environment:
+      - PYTHONUNBUFFERED=1
+    # No ports needed — bot uses long polling
