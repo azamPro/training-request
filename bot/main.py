@@ -1,4 +1,12 @@
 import logging
+import warnings
+
+from telegram.warnings import PTBUserWarning
+
+# suppress harmless warnings
+warnings.filterwarnings("ignore", category=PTBUserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="pypdf")
+warnings.filterwarnings("ignore", message=".*ARC4.*")
 
 from telegram import Update
 from telegram.ext import (

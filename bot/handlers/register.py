@@ -180,4 +180,5 @@ register_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler("cancel", reg_cancel)],
     allow_reentry=True,
+    per_message=False,
 )
