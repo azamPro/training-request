@@ -30,6 +30,16 @@ _SKIP_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton("⏭ تخطي", callback_data="skip_sig")]
 ])
 
+_BUSY_MSG = "⚠️ أتمم هذه الخطوة أولاً، أو أرسل /cancel للخروج."
+
+
+def _stay(state: int) -> CallbackQueryHandler:
+    """Return a handler that answers any stray button click and stays in current state."""
+    async def _h(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        await update.callback_query.answer(_BUSY_MSG)
+        return state
+    return CallbackQueryHandler(_h)
+
 
 async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
@@ -88,7 +98,7 @@ async def reg_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(
         "📝 *الخطوة 5 من 5 — اختياري*\n\n"
         "أرسل *صورة توقيعك* لإدراجها في النموذج،\n"
-        "أو اضغط *تخطي* لاستخدام اسمك كتوقيع نصي.",
+        "أو اضغط *تخطي* لترك خانة التوقيع فارغة.",
         parse_mode="Markdown",
         reply_markup=_SKIP_KB,
     )
@@ -127,22 +137,22 @@ async def _save_user(
         user = db.query(User).filter(User.telegram_id == tg_id).first()
         if user:
             user.telegram_username = update.effective_user.username
-            user.full_name = d["full_name"]
-            user.university_id = d["university_id"]
-            user.department = d["department"]
-            user.remaining_hours = d["remaining_hours"]
+            user.full_name         = d["full_name"]
+            user.university_id     = d["university_id"]
+            user.department        = d["department"]
+            user.remaining_hours   = d["remaining_hours"]
             if d.get("signature_path") is not None:
                 user.signature_path = d["signature_path"]
             verb = "تحديث"
         else:
             user = User(
-                telegram_id=tg_id,
-                telegram_username=update.effective_user.username,
-                full_name=d["full_name"],
-                university_id=d["university_id"],
-                department=d["department"],
-                remaining_hours=d["remaining_hours"],
-                signature_path=d.get("signature_path"),
+                telegram_id       = tg_id,
+                telegram_username = update.effective_user.username,
+                full_name         = d["full_name"],
+                university_id     = d["university_id"],
+                department        = d["department"],
+                remaining_hours   = d["remaining_hours"],
+                signature_path    = d.get("signature_path"),
             )
             db.add(user)
             verb = "حفظ"
@@ -157,17 +167,13 @@ async def _save_user(
     )
 
     if via_callback:
-        await update.callback_query.edit_message_text(
-            success_msg, parse_mode="Markdown",
-        )
+        await update.callback_query.edit_message_text(success_msg, parse_mode="Markdown")
         await update.callback_query.message.reply_text(
             "اختر ما تريد:", reply_markup=main_menu_keyboard(),
         )
     else:
         await update.message.reply_text(
-            success_msg,
-            parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(),
+            success_msg, parse_mode="Markdown", reply_markup=main_menu_keyboard(),
         )
 
     context.user_data.clear()
@@ -177,7 +183,7 @@ async def _save_user(
 async def reg_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text(
-        "❌ تم إلغاء التسجيل. استخدم /register للبدء من جديد.",
+        "❌ تم إلغاء التسجيل.",
         reply_markup=main_menu_keyboard(),
     )
     return ConversationHandler.END
@@ -190,13 +196,26 @@ register_conv_handler = ConversationHandler(
         CallbackQueryHandler(register_start, pattern="^(cb_start_register|cb_edit)$"),
     ],
     states={
-        REG_NAME:   [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name)],
-        REG_UNI_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_uni_id)],
-        REG_DEPT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_dept)],
-        REG_HOURS:  [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_hours)],
+        REG_NAME: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name),
+            _stay(REG_NAME),
+        ],
+        REG_UNI_ID: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_uni_id),
+            _stay(REG_UNI_ID),
+        ],
+        REG_DEPT: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_dept),
+            _stay(REG_DEPT),
+        ],
+        REG_HOURS: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_hours),
+            _stay(REG_HOURS),
+        ],
         REG_SIG: [
             MessageHandler(filters.PHOTO, reg_sig_photo),
             CallbackQueryHandler(reg_sig_skip, pattern="^skip_sig$"),
+            _stay(REG_SIG),
         ],
     },
     fallbacks=[CommandHandler("cancel", reg_cancel)],

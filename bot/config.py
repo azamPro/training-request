@@ -22,5 +22,6 @@ AWS_REGION: str = os.getenv("AWS_REGION", "")
 
 USE_S3: bool = bool(AWS_ACCESS_KEY_ID and AWS_S3_BUCKET)
 
-PDF_FORM_PATH: str = os.path.join(os.path.dirname(__file__), "pdf", "assets", "form.pdf")
-FONT_PATH: str = os.path.join(os.path.dirname(__file__), "pdf", "assets", "Amiri-Regular.ttf")
+PDF_FORM_PATH: str  = os.path.join(os.path.dirname(__file__), "pdf", "assets", "form.pdf")
+FONT_PATH: str      = os.path.join(os.path.dirname(__file__), "pdf", "assets", "Amiri-Regular.ttf")
+FONT_BOLD_PATH: str = os.path.join(os.path.dirname(__file__), "pdf", "assets", "Amiri-Bold.ttf")

@@ -13,6 +13,7 @@ from telegram.ext import (
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ContextTypes,
     filters,
 )
 
@@ -38,37 +39,65 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Unhandled exception:", exc_info=context.error)
+    if isinstance(update, Update):
+        if update.callback_query:
+            try:
+                await update.callback_query.answer("⚠️ حدث خطأ. حاول مرة أخرى.")
+            except Exception:
+                pass
+        elif update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "⚠️ حدث خطأ غير متوقع. حاول مرة أخرى أو تواصل مع المسؤول."
+                )
+            except Exception:
+                pass
+
+
+async def _answer_unknown_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Catch any callback query not handled by any other handler."""
+    await update.callback_query.answer()
+
+
 def main() -> None:
     init_db()
     logger.info("Database initialised")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # ── Conversation handlers (checked first) ──────────────────────────────
+    # ── Error handler (catches all unhandled exceptions) ────────────────────
+    app.add_error_handler(_error_handler)
+
+    # ── Conversation handlers (must be checked before generic handlers) ─────
     app.add_handler(register_conv_handler)
     app.add_handler(request_conv_handler)
 
-    # ── Commands ────────────────────────────────────────────────────────────
+    # ── Commands ─────────────────────────────────────────────────────────────
     app.add_handler(CommandHandler("start",   start_handler))
     app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("help",    help_handler))
 
-    # ── Inline button callbacks ─────────────────────────────────────────────
+    # ── Inline button callbacks ───────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^cb_main$"))
     app.add_handler(CallbackQueryHandler(profile_callback,   pattern="^cb_profile$"))
     app.add_handler(CallbackQueryHandler(history_callback,   pattern="^cb_history$"))
     app.add_handler(CallbackQueryHandler(help_callback,      pattern="^cb_help$"))
 
-    # ── ./ shortcut ─────────────────────────────────────────────────────────
+    # ── ./ shortcut ──────────────────────────────────────────────────────────
     app.add_handler(
         MessageHandler(filters.TEXT & filters.Regex(r"^\.\/"), handle_dotslash)
     )
 
-    # ── Catch-all: unknown messages → show main menu ─────────────────────────
+    # ── Unknown text messages → show main menu ────────────────────────────────
     app.add_handler(
-        MessageHandler(filters.ALL & ~filters.COMMAND, unknown_handler)
+        MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_handler)
     )
+
+    # ── Catch-all for any unhandled callback query (prevents hanging buttons) ─
+    app.add_handler(CallbackQueryHandler(_answer_unknown_cb))
 
     logger.info("Bot starting...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

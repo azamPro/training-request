@@ -1,3 +1,4 @@
+from urllib.parse import quote_plus
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
@@ -6,9 +7,10 @@ from typing import Generator
 from bot.config import DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS
 from bot.database.models import Base
 
+# quote_plus encodes special URL chars (>, ?, &, etc.) in user/password
 DATABASE_URL = (
-    f"mysql+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    "?charset=utf8mb4"
+    f"mysql+pymysql://{quote_plus(DB_USER)}:{quote_plus(DB_PASS)}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4"
 )
 
 engine = create_engine(

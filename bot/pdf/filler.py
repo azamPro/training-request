@@ -8,66 +8,86 @@ passing to reportlab, otherwise letters render disconnected and in wrong order.
 Coordinate system: reportlab uses bottom-left origin (y=0 at bottom).
 PDF page height = 841.92 pts. To convert from top-origin bbox coords:
     reportlab_y = PAGE_HEIGHT - bbox_yMax
+
+To calibrate field positions run:  python -m tests.test_pdf
 """
 
 import io
 import os
+import warnings
 from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
 import arabic_reshaper
 from bidi.algorithm import get_display
-from hijri_converter import convert
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from pypdf import PdfReader, PdfWriter
 
-from bot.config import FONT_PATH, PDF_FORM_PATH
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    from hijri_converter import convert as _hijri_convert
+
+from bot.config import FONT_PATH, FONT_BOLD_PATH, PDF_FORM_PATH
 
 PAGE_WIDTH, PAGE_HEIGHT = A4  # 595.28 x 841.89
 
-FONT_NAME = "Amiri"
+FONT_NAME      = "Amiri"
+FONT_NAME_BOLD = "AmiriBold"
 
-# ---------------------------------------------------------------------------
-# Field coordinate map
-# Each entry: x = horizontal anchor, y = reportlab y (from bottom),
-#             align = "right" | "center" | "left", size = font size in pts
-# ---------------------------------------------------------------------------
+# ── Field coordinate map ────────────────────────────────────────────────────
+# x     = horizontal anchor point
+# y     = reportlab y from bottom (PAGE_HEIGHT − bbox_yMax)
+# align = "right" | "center" | "left"
+# size  = font size in pts
+# bold  = use bold font (optional)
+# ──────────────────────────────────────────────────────────────────────────
 FIELDS: dict[str, dict] = {
-    "full_name":       {"x": 477, "y": 671, "align": "right",  "size": 11},
-    "university_id":   {"x": 213, "y": 671, "align": "right",  "size": 11},
-    "department":      {"x": 491, "y": 653, "align": "right",  "size": 11},
-    "remaining_hours": {"x": 173, "y": 653, "align": "right",  "size": 11},
-    "company_name":    {"x": 553, "y": 573, "align": "right",  "size": 11},
-    "signature":       {"x": 284, "y": 435, "align": "right",  "size": 10},
-    "date_day":        {"x": 122, "y": 435, "align": "center", "size": 10},
-    "date_month":      {"x": 95,  "y": 435, "align": "center", "size": 10},
-    "date_year_last2": {"x": 74,  "y": 435, "align": "center", "size": 10},
+    # Student data table — row 1
+    "full_name":       {"x": 452, "y": 671, "align": "right",  "size": 11},
+    "university_id":   {"x": 188, "y": 671, "align": "right",  "size": 11},
+    # Student data table — row 2
+    "department":      {"x": 466, "y": 653, "align": "right",  "size": 11},
+    "remaining_hours": {"x": 148, "y": 653, "align": "right",  "size": 11},
+    # Company name — first dashed line under the request sentence
+    "company_name":    {"x": 540, "y": 573, "align": "right",  "size": 11},
+    # Signature — left blank (student signs by hand); field kept for future image embedding
+    "signature":       {"x": 280, "y": 435, "align": "right",  "size": 10},
+    # Hijri date — format: التاريخ: [day] / [month] / 14[year] هـ
+    "date_day":        {"x": 112, "y": 435, "align": "center", "size": 10, "bold": True},
+    "date_month":      {"x": 95,  "y": 435, "align": "center", "size": 10, "bold": True},
+    "date_year_last2": {"x": 75,  "y": 435, "align": "left",   "size": 10, "bold": True},
 }
 
 
-def _register_font() -> None:
+def _register_fonts() -> None:
     if FONT_NAME not in pdfmetrics.getRegisteredFontNames():
         if not os.path.exists(FONT_PATH):
             raise FileNotFoundError(
-                f"Arabic font not found at {FONT_PATH}. "
-                "Run: docker compose build  (font is downloaded during build)"
+                f"Arabic font not found at {FONT_PATH}. Run: docker compose build"
             )
         pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH))
 
+    if FONT_NAME_BOLD not in pdfmetrics.getRegisteredFontNames():
+        if not os.path.exists(FONT_BOLD_PATH):
+            raise FileNotFoundError(
+                f"Arabic bold font not found at {FONT_BOLD_PATH}. Run: docker compose build"
+            )
+        pdfmetrics.registerFont(TTFont(FONT_NAME_BOLD, FONT_BOLD_PATH))
+
 
 def _ar(text: str) -> str:
-    """Reshape + apply bidi so reportlab renders Arabic correctly."""
-    reshaped = arabic_reshaper.reshape(str(text))
-    return get_display(reshaped)
+    """Reshape + apply bidi so reportlab renders Arabic correctly (LTR visual order)."""
+    return get_display(arabic_reshaper.reshape(str(text)))
 
 
 def _draw_field(c: canvas.Canvas, key: str, value: str) -> None:
     cfg = FIELDS[key]
-    c.setFont(FONT_NAME, cfg["size"])
+    font = FONT_NAME_BOLD if cfg.get("bold") else FONT_NAME
+    c.setFont(font, cfg["size"])
     text = _ar(value)
     x, y, align = cfg["x"], cfg["y"], cfg["align"]
     if align == "right":
@@ -85,90 +105,67 @@ class FormData:
     department: str
     remaining_hours: str
     company_name: str
-    signature: str
+    signature: str          # empty string = leave blank (student signs by hand)
     request_date: Optional[date] = None  # defaults to today
 
 
 def _hijri_today(d: date) -> tuple[str, str, str]:
-    """Return (day, month, year_last2) in Hijri."""
-    h = convert.Gregorian(d.year, d.month, d.day).to_hijri()
+    """Return (day, month, year_last2) in Hijri for the given Gregorian date."""
+    h = _hijri_convert.Gregorian(d.year, d.month, d.day).to_hijri()
     return str(h.day), str(h.month), str(h.year)[-2:]
 
 
-def fill_form(data: FormData, output_path: str) -> str:
-    """
-    Fill the training request PDF with the given data.
-    Writes the result to output_path and returns output_path.
-    """
-    _register_font()
-
+def _build_overlay(data: FormData) -> io.BytesIO:
+    """Build the text overlay as an in-memory PDF."""
     req_date = data.request_date or date.today()
     day, month, year_last2 = _hijri_today(req_date)
 
-    # Build an overlay PDF in memory
-    overlay_buffer = io.BytesIO()
-    c = canvas.Canvas(overlay_buffer, pagesize=A4)
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
 
     _draw_field(c, "full_name",       data.full_name)
     _draw_field(c, "university_id",   data.university_id)
     _draw_field(c, "department",      data.department)
     _draw_field(c, "remaining_hours", data.remaining_hours)
     _draw_field(c, "company_name",    data.company_name)
-    _draw_field(c, "signature",       data.signature)
+
+    # Signature: only draw if provided
+    if data.signature:
+        _draw_field(c, "signature", data.signature)
+
     _draw_field(c, "date_day",        day)
     _draw_field(c, "date_month",      month)
     _draw_field(c, "date_year_last2", year_last2)
 
     c.save()
-    overlay_buffer.seek(0)
+    buf.seek(0)
+    return buf
 
-    # Merge overlay onto the original form
-    base_reader = PdfReader(PDF_FORM_PATH)
-    overlay_reader = PdfReader(overlay_buffer)
 
+def _merge(overlay_buf: io.BytesIO) -> PdfWriter:
+    base_reader    = PdfReader(PDF_FORM_PATH)
+    overlay_reader = PdfReader(overlay_buf)
     writer = PdfWriter()
-    base_page = base_reader.pages[0]
-    base_page.merge_page(overlay_reader.pages[0])
-    writer.add_page(base_page)
+    page = base_reader.pages[0]
+    page.merge_page(overlay_reader.pages[0])
+    writer.add_page(page)
+    return writer
 
+
+def fill_form(data: FormData, output_path: str) -> str:
+    """Fill the form and write to output_path. Returns output_path."""
+    _register_fonts()
+    writer = _merge(_build_overlay(data))
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     with open(output_path, "wb") as f:
         writer.write(f)
-
     return output_path
 
 
 def fill_form_to_bytes(data: FormData) -> bytes:
-    """Fill the form and return the result as bytes (for sending via Telegram)."""
-    _register_font()
-
-    req_date = data.request_date or date.today()
-    day, month, year_last2 = _hijri_today(req_date)
-
-    overlay_buffer = io.BytesIO()
-    c = canvas.Canvas(overlay_buffer, pagesize=A4)
-
-    _draw_field(c, "full_name",       data.full_name)
-    _draw_field(c, "university_id",   data.university_id)
-    _draw_field(c, "department",      data.department)
-    _draw_field(c, "remaining_hours", data.remaining_hours)
-    _draw_field(c, "company_name",    data.company_name)
-    _draw_field(c, "signature",       data.signature)
-    _draw_field(c, "date_day",        day)
-    _draw_field(c, "date_month",      month)
-    _draw_field(c, "date_year_last2", year_last2)
-
-    c.save()
-    overlay_buffer.seek(0)
-
-    base_reader = PdfReader(PDF_FORM_PATH)
-    overlay_reader = PdfReader(overlay_buffer)
-
-    writer = PdfWriter()
-    base_page = base_reader.pages[0]
-    base_page.merge_page(overlay_reader.pages[0])
-    writer.add_page(base_page)
-
+    """Fill the form and return the result as raw bytes."""
+    _register_fonts()
+    writer = _merge(_build_overlay(data))
     out = io.BytesIO()
     writer.write(out)
     return out.getvalue()

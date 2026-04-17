@@ -27,6 +27,15 @@ from bot.utils import NOT_REGISTERED, main_menu_keyboard
 
 REQ_COMPANY = 0
 
+_BUSY_MSG = "⚠️ أدخل اسم الشركة أولاً، أو أرسل /cancel للخروج."
+
+
+def _stay(state: int) -> CallbackQueryHandler:
+    async def _h(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        await update.callback_query.answer(_BUSY_MSG)
+        return state
+    return CallbackQueryHandler(_h)
+
 
 async def request_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.callback_query:
@@ -65,12 +74,12 @@ async def req_company(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
                 return ConversationHandler.END
 
             form_data = FormData(
-                full_name=user.full_name,
-                university_id=user.university_id,
-                department=user.department,
-                remaining_hours=user.remaining_hours,
-                company_name=company_name,
-                signature=user.full_name,
+                full_name      = user.full_name,
+                university_id  = user.university_id,
+                department     = user.department,
+                remaining_hours= user.remaining_hours,
+                company_name   = company_name,
+                signature      = "",   # leave blank — student signs by hand
             )
 
             pdf_bytes = fill_form_to_bytes(form_data)
@@ -127,7 +136,10 @@ request_conv_handler = ConversationHandler(
         CallbackQueryHandler(request_start, pattern="^cb_request$"),
     ],
     states={
-        REQ_COMPANY: [MessageHandler(filters.TEXT & ~filters.COMMAND, req_company)],
+        REQ_COMPANY: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, req_company),
+            _stay(REQ_COMPANY),
+        ],
     },
     fallbacks=[CommandHandler("cancel", req_cancel)],
     allow_reentry=True,

@@ -1,8 +1,11 @@
-# Environment
+# ── Secrets ───────────────────────────────────────────────────────────────
 .env
 *.env
 
-# Python
+# ── Runtime data (never commit user data or generated files) ──────────────
+data/
+
+# ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
@@ -15,28 +18,23 @@ build/
 venv/
 env/
 
-# Generated PDFs (user data — never commit)
-data/generated/
-data/signatures/
-
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# Docker
-.docker/
-
-# OS
+# ── macOS ─────────────────────────────────────────────────────────────────
 .DS_Store
-Thumbs.db
 
-# Logs
+# ── Logs ──────────────────────────────────────────────────────────────────
 *.log
 logs/
 
-# Testing
+# ── Testing ───────────────────────────────────────────────────────────────
 .pytest_cache/
 .coverage
 htmlcov/
+
+# ── Original form file in root (kept in bot/pdf/assets/form.pdf) ──────────
+نموذج طلب تدريب صيفي.pdf

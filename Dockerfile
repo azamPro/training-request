@@ -17,8 +17,12 @@ RUN mkdir -p /app/bot/pdf/assets && \
     curl -fsSL \
     "https://github.com/aliftype/amiri/releases/download/1.000/Amiri-1.000.zip" \
     -o /tmp/amiri.zip && \
-    unzip -o /tmp/amiri.zip "Amiri-1.000/Amiri-Regular.ttf" -d /tmp/amiri_ext/ && \
+    unzip -o /tmp/amiri.zip \
+        "Amiri-1.000/Amiri-Regular.ttf" \
+        "Amiri-1.000/Amiri-Bold.ttf" \
+        -d /tmp/amiri_ext/ && \
     mv /tmp/amiri_ext/Amiri-1.000/Amiri-Regular.ttf /app/bot/pdf/assets/ && \
+    mv /tmp/amiri_ext/Amiri-1.000/Amiri-Bold.ttf    /app/bot/pdf/assets/ && \
     rm -rf /tmp/amiri.zip /tmp/amiri_ext
 
 # Copy source code
