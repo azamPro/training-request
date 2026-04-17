@@ -59,7 +59,7 @@ No `--build` needed unless you changed the code.
 docker compose up -d --build
 ```
 
-The `-d` flag runs it detached (in the background).
+The `-d` flag runs it detached (in the background ).
 
 ---
 
