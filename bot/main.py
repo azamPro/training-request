@@ -29,6 +29,7 @@ from bot.handlers.start import (
     unknown_handler,
 )
 from bot.handlers.register import register_conv_handler
+from bot.handlers.edit import edit_conv_handler
 from bot.handlers.request import request_conv_handler
 from bot.handlers.help import help_handler, help_callback, handle_dotslash
 
@@ -72,6 +73,7 @@ def main() -> None:
 
     # ── Conversation handlers (must be checked before generic handlers) ─────
     app.add_handler(register_conv_handler)
+    app.add_handler(edit_conv_handler)
     app.add_handler(request_conv_handler)
 
     # ── Commands ─────────────────────────────────────────────────────────────
