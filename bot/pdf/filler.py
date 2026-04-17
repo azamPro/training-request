@@ -48,11 +48,11 @@ FONT_NAME_BOLD = "AmiriBold"
 # ──────────────────────────────────────────────────────────────────────────
 FIELDS: dict[str, dict] = {
     # Student data table — row 1
-    "full_name":           {"x": 452, "y": 671, "align": "right",  "size": 11},
-    "university_id":       {"x": 183, "y": 671, "align": "right",  "size": 11},
+    "full_name":           {"x": 452, "y": 676, "align": "right",  "size": 11},
+    "university_id":       {"x": 155, "y": 676, "align": "right",  "size": 11},
     # Student data table — row 2
-    "department":          {"x": 466, "y": 653, "align": "right",  "size": 11},
-    "remaining_hours":     {"x": 148, "y": 653, "align": "right",  "size": 11},
+    "department":          {"x": 455, "y": 656, "align": "right",  "size": 11},
+    "remaining_hours":     {"x": 148, "y": 656, "align": "right",  "size": 11},
     # Company name — first dashed line under the request sentence
     "company_name":        {"x": 540, "y": 584, "align": "right",  "size": 11, "bold": True},
     # Optional company description — line below company name
