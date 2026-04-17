@@ -7,7 +7,7 @@ warnings.filterwarnings("ignore", category=PTBUserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pypdf")
 warnings.filterwarnings("ignore", message=".*ARC4.*")
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -17,7 +17,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.config import TELEGRAM_BOT_TOKEN
+from bot.config import TELEGRAM_BOT_TOKEN, ADMIN_TELEGRAM_ID
 from bot.database.db import init_db
 from bot.handlers.start import (
     start_handler,
@@ -32,6 +32,7 @@ from bot.handlers.register import register_conv_handler
 from bot.handlers.edit import edit_conv_handler
 from bot.handlers.request import request_conv_handler
 from bot.handlers.help import help_handler, help_callback, handle_dotslash
+from bot.handlers.error_report import error_report_conv_handler, skip_error_cb
 
 logging.basicConfig(
     format="%(asctime)s — %(name)s — %(levelname)s — %(message)s",
@@ -40,21 +41,42 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+_REPORT_KB = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("📝 إبلاغ عن المشكلة", callback_data="report_start"),
+        InlineKeyboardButton("❌ تخطي",              callback_data="skip_error"),
+    ]
+])
+
+
 async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled exception:", exc_info=context.error)
-    if isinstance(update, Update):
-        if update.callback_query:
-            try:
-                await update.callback_query.answer("⚠️ حدث خطأ. حاول مرة أخرى.")
-            except Exception:
-                pass
-        elif update.effective_message:
-            try:
-                await update.effective_message.reply_text(
-                    "⚠️ حدث خطأ غير متوقع. حاول مرة أخرى أو تواصل مع المسؤول."
-                )
-            except Exception:
-                pass
+
+    if ADMIN_TELEGRAM_ID:
+        admin_msg = (
+            f"🚨 *خطأ غير متوقع في البوت*\n\n"
+            f"`{str(context.error)[:600]}`"
+        )
+        try:
+            await context.bot.send_message(ADMIN_TELEGRAM_ID, admin_msg, parse_mode="Markdown")
+        except Exception:
+            pass
+
+    if not isinstance(update, Update):
+        return
+
+    error_text = "⚠️ حدث خطأ غير متوقع.\nهل تريد إبلاغ المطور عن المشكلة؟"
+    if update.callback_query:
+        try:
+            await update.callback_query.answer("⚠️ حدث خطأ.")
+            await update.callback_query.message.reply_text(error_text, reply_markup=_REPORT_KB)
+        except Exception:
+            pass
+    elif update.effective_message:
+        try:
+            await update.effective_message.reply_text(error_text, reply_markup=_REPORT_KB)
+        except Exception:
+            pass
 
 
 async def _answer_unknown_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -72,6 +94,7 @@ def main() -> None:
     app.add_error_handler(_error_handler)
 
     # ── Conversation handlers (must be checked before generic handlers) ─────
+    app.add_handler(error_report_conv_handler)
     app.add_handler(register_conv_handler)
     app.add_handler(edit_conv_handler)
     app.add_handler(request_conv_handler)
@@ -97,6 +120,9 @@ def main() -> None:
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_handler)
     )
+
+    # ── Error report skip button ─────────────────────────────────────────────
+    app.add_handler(CallbackQueryHandler(skip_error_cb, pattern="^skip_error$"))
 
     # ── Catch-all for any unhandled callback query (prevents hanging buttons) ─
     app.add_handler(CallbackQueryHandler(_answer_unknown_cb))

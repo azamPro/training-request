@@ -131,6 +131,13 @@ async def edit_value_text(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             return EDIT_VALUE
     elif field == "university_id":
         value = arabic_to_western(value)
+        if not (value.isdigit() and len(value) == 9):
+            await update.message.reply_text(
+                "⚠️ الرقم الجامعي يجب أن يكون *9 أرقام* فقط — مثال: `432111217`",
+                parse_mode="Markdown",
+                reply_markup=_CANCEL_KB,
+            )
+            return EDIT_VALUE
 
     if value.startswith("⏭"):
         context.user_data.clear()
