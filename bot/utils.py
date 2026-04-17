@@ -1,4 +1,24 @@
+import base64
+from typing import Optional, Tuple
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+# Supported WebApp image formats: (data-url-prefix, file-extension)
+_IMG_PREFIXES = [
+    ("data:image/jpeg;base64,", ".jpg"),
+    ("data:image/png;base64,",  ".png"),
+]
+
+
+def decode_webapp_image(data: str) -> Optional[Tuple[bytes, str]]:
+    """Decode a WebApp sendData image string.
+
+    Returns (bytes, ext) on success, None if format is unrecognised.
+    Accepts both JPEG and PNG data URLs.
+    """
+    for prefix, ext in _IMG_PREFIXES:
+        if data.startswith(prefix):
+            return base64.b64decode(data[len(prefix):]), ext
+    return None
 
 
 def arabic_to_western(text: str) -> str:
