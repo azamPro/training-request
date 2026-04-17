@@ -25,6 +25,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
 from pypdf import PdfReader, PdfWriter
 
 with warnings.catch_warnings():
@@ -47,19 +48,21 @@ FONT_NAME_BOLD = "AmiriBold"
 # ──────────────────────────────────────────────────────────────────────────
 FIELDS: dict[str, dict] = {
     # Student data table — row 1
-    "full_name":       {"x": 452, "y": 671, "align": "right",  "size": 11},
-    "university_id":   {"x": 188, "y": 671, "align": "right",  "size": 11},
+    "full_name":           {"x": 452, "y": 671, "align": "right",  "size": 11},
+    "university_id":       {"x": 188, "y": 671, "align": "right",  "size": 11},
     # Student data table — row 2
-    "department":      {"x": 466, "y": 653, "align": "right",  "size": 11},
-    "remaining_hours": {"x": 148, "y": 653, "align": "right",  "size": 11},
+    "department":          {"x": 466, "y": 653, "align": "right",  "size": 11},
+    "remaining_hours":     {"x": 148, "y": 653, "align": "right",  "size": 11},
     # Company name — first dashed line under the request sentence
-    "company_name":    {"x": 540, "y": 582, "align": "right",  "size": 11, "bold": True},
-    # Signature — left blank (student signs by hand); field kept for future image embedding
-    "signature":       {"x": 280, "y": 435, "align": "right",  "size": 10},
+    "company_name":        {"x": 540, "y": 584, "align": "right",  "size": 11, "bold": True},
+    # Optional company description — line below company name
+    "company_description": {"x": 540, "y": 566, "align": "right",  "size": 10},
+    # Signature — image embedded if available; field kept for text fallback
+    "signature":           {"x": 280, "y": 435, "align": "right",  "size": 10},
     # Hijri date — format: التاريخ: [day] / [month] / 14[year] هـ
-    "date_day":        {"x": 112, "y": 435, "align": "center", "size": 10, "bold": True},
-    "date_month":      {"x": 95,  "y": 435, "align": "center", "size": 10, "bold": True},
-    "date_year_last2": {"x": 75,  "y": 435, "align": "left",   "size": 10, "bold": True},
+    "date_day":            {"x": 112, "y": 435, "align": "center", "size": 10, "bold": True},
+    "date_month":          {"x": 95,  "y": 435, "align": "center", "size": 10, "bold": True},
+    "date_year_last2":     {"x": 75,  "y": 435, "align": "left",   "size": 10, "bold": True},
 }
 
 
@@ -98,6 +101,19 @@ def _draw_field(c: canvas.Canvas, key: str, value: str) -> None:
         c.drawString(x, y, text)
 
 
+def _draw_signature_image(c: canvas.Canvas, image_path: str) -> None:
+    """Embed a drawn signature image at the signature field location."""
+    cfg = FIELDS["signature"]
+    try:
+        img = ImageReader(image_path)
+        w, h = 130, 50  # pts — run test_pdf.py to recalibrate if needed
+        x = cfg["x"] - w / 2
+        y = cfg["y"] - h / 2
+        c.drawImage(img, x, y, width=w, height=h, mask="auto", preserveAspectRatio=True)
+    except Exception:
+        pass
+
+
 @dataclass
 class FormData:
     full_name: str
@@ -105,8 +121,10 @@ class FormData:
     department: str
     remaining_hours: str
     company_name: str
-    signature: str          # empty string = leave blank (student signs by hand)
-    request_date: Optional[date] = None  # defaults to today
+    signature: str = ""                        # legacy text (unused)
+    company_description: Optional[str] = None  # optional second line under company name
+    signature_image_path: Optional[str] = None # path to drawn PNG/JPG signature
+    request_date: Optional[date] = None        # defaults to today
 
 
 def _hijri_today(d: date) -> tuple[str, str, str]:
@@ -129,8 +147,12 @@ def _build_overlay(data: FormData) -> io.BytesIO:
     _draw_field(c, "remaining_hours", data.remaining_hours)
     _draw_field(c, "company_name",    data.company_name)
 
-    # Signature: only draw if provided
-    if data.signature:
+    if data.company_description:
+        _draw_field(c, "company_description", data.company_description)
+
+    if data.signature_image_path and os.path.exists(data.signature_image_path):
+        _draw_signature_image(c, data.signature_image_path)
+    elif data.signature:
         _draw_field(c, "signature", data.signature)
 
     _draw_field(c, "date_day",        day)

@@ -1,15 +1,21 @@
 """
-Registration conversation — creates or updates user profile.
+Registration conversation — creates user profile (full 5-step flow).
 
 Entry points:
-  /register, /edit commands
-  cb_start_register, cb_edit inline buttons
+  /register command
+  cb_start_register inline button
 
-Steps: الاسم → الرقم الجامعي → القسم → الساعات → التوقيع (اختياري)
+For editing existing data use /edit (handled in edit.py).
 """
 
+import base64
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import (
+    Update,
+    InlineKeyboardButton, InlineKeyboardMarkup,
+    KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
+    WebAppInfo,
+)
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -21,12 +27,12 @@ from telegram.ext import (
 
 from bot.database.db import get_db
 from bot.database.models import User
-from bot.config import GENERATED_PDF_DIR
+from bot.config import GENERATED_PDF_DIR, WEBAPP_URL
 from bot.utils import arabic_to_western, main_menu_keyboard
 
 REG_NAME, REG_UNI_ID, REG_DEPT, REG_HOURS, REG_SIG = range(5)
 
-_SKIP_KB = InlineKeyboardMarkup([
+_SKIP_INLINE_KB = InlineKeyboardMarkup([
     [InlineKeyboardButton("⏭ تخطي", callback_data="skip_sig")]
 ])
 
@@ -34,11 +40,23 @@ _BUSY_MSG = "⚠️ أتمم هذه الخطوة أولاً، أو أرسل /can
 
 
 def _stay(state: int) -> CallbackQueryHandler:
-    """Return a handler that answers any stray button click and stays in current state."""
     async def _h(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await update.callback_query.answer(_BUSY_MSG)
         return state
     return CallbackQueryHandler(_h)
+
+
+def _sig_keyboard():
+    if WEBAPP_URL:
+        return ReplyKeyboardMarkup(
+            [
+                [KeyboardButton("✍️ افتح لوحة التوقيع", web_app=WebAppInfo(url=WEBAPP_URL))],
+                [KeyboardButton("⏭ تخطي")],
+            ],
+            resize_keyboard=True,
+            one_time_keyboard=True,
+        )
+    return _SKIP_INLINE_KB
 
 
 async def register_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -95,14 +113,41 @@ async def reg_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return REG_HOURS
 
     context.user_data["remaining_hours"] = raw
-    await update.message.reply_text(
-        "📝 *الخطوة 5 من 5 — اختياري*\n\n"
-        "أرسل *صورة توقيعك* لإدراجها في النموذج،\n"
-        "أو اضغط *تخطي* لترك خانة التوقيع فارغة.",
-        parse_mode="Markdown",
-        reply_markup=_SKIP_KB,
-    )
+    kb = _sig_keyboard()
+    if WEBAPP_URL:
+        msg = (
+            "📝 *الخطوة 5 من 5 — التوقيع (اختياري)*\n\n"
+            "اضغط *افتح لوحة التوقيع* لرسم توقيعك بإصبعك،\n"
+            "سيُحفظ في ملفك ويُدرج تلقائياً في كل طلب.\n\n"
+            "أو اضغط *تخطي* لترك خانة التوقيع فارغة."
+        )
+    else:
+        msg = (
+            "📝 *الخطوة 5 من 5 — اختياري*\n\n"
+            "أرسل *صورة توقيعك* لإدراجها في النموذج،\n"
+            "أو اضغط *تخطي* لترك خانة التوقيع فارغة."
+        )
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=kb)
     return REG_SIG
+
+
+async def reg_sig_webapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    data = update.message.web_app_data.data
+    prefix = "data:image/png;base64,"
+    if not data.startswith(prefix):
+        await update.message.reply_text("⚠️ بيانات التوقيع غير صالحة. حاول مرة أخرى.")
+        return REG_SIG
+
+    img_bytes = base64.b64decode(data[len(prefix):])
+    sig_dir = os.path.join(GENERATED_PDF_DIR, "signatures")
+    os.makedirs(sig_dir, exist_ok=True)
+
+    tg_id = update.effective_user.id
+    sig_path = os.path.join(sig_dir, f"{tg_id}_sig.png")
+    with open(sig_path, "wb") as f:
+        f.write(img_bytes)
+    context.user_data["signature_path"] = sig_path
+    return await _save_user(update, context)
 
 
 async def reg_sig_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -115,11 +160,15 @@ async def reg_sig_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     file = await context.bot.get_file(photo.file_id)
     await file.download_to_drive(sig_path)
     context.user_data["signature_path"] = sig_path
-
     return await _save_user(update, context)
 
 
-async def reg_sig_skip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def reg_sig_skip_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["signature_path"] = None
+    return await _save_user(update, context)
+
+
+async def reg_sig_skip_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.callback_query.answer()
     context.user_data["signature_path"] = None
     return await _save_user(update, context, via_callback=True)
@@ -173,7 +222,10 @@ async def _save_user(
         )
     else:
         await update.message.reply_text(
-            success_msg, parse_mode="Markdown", reply_markup=main_menu_keyboard(),
+            success_msg, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove(),
+        )
+        await update.message.reply_text(
+            "اختر ما تريد:", reply_markup=main_menu_keyboard(),
         )
 
     context.user_data.clear()
@@ -184,16 +236,16 @@ async def reg_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data.clear()
     await update.message.reply_text(
         "❌ تم إلغاء التسجيل.",
-        reply_markup=main_menu_keyboard(),
+        reply_markup=ReplyKeyboardRemove(),
     )
+    await update.message.reply_text("اختر ما تريد:", reply_markup=main_menu_keyboard())
     return ConversationHandler.END
 
 
 register_conv_handler = ConversationHandler(
     entry_points=[
         CommandHandler("register", register_start),
-        CommandHandler("edit",     register_start),
-        CallbackQueryHandler(register_start, pattern="^(cb_start_register|cb_edit)$"),
+        CallbackQueryHandler(register_start, pattern="^cb_start_register$"),
     ],
     states={
         REG_NAME: [
@@ -213,8 +265,10 @@ register_conv_handler = ConversationHandler(
             _stay(REG_HOURS),
         ],
         REG_SIG: [
+            MessageHandler(filters.StatusUpdate.WEB_APP_DATA, reg_sig_webapp),
             MessageHandler(filters.PHOTO, reg_sig_photo),
-            CallbackQueryHandler(reg_sig_skip, pattern="^skip_sig$"),
+            MessageHandler(filters.TEXT & filters.Regex(r"^⏭"), reg_sig_skip_text),
+            CallbackQueryHandler(reg_sig_skip_cb, pattern="^skip_sig$"),
             _stay(REG_SIG),
         ],
     },

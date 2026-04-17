@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>لوحة التوقيع</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--tg-theme-bg-color, #f5f5f5);
+      color: var(--tg-theme-text-color, #222);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px;
+      min-height: 100vh;
+    }
+    h2 { font-size: 18px; margin-bottom: 6px; }
+    p  { font-size: 13px; color: #888; margin-bottom: 14px; }
+    #canvas-wrap {
+      border: 2px dashed #bbb;
+      border-radius: 12px;
+      background: #fff;
+      width: 100%;
+      max-width: 380px;
+      overflow: hidden;
+      touch-action: none;
+    }
+    canvas { display: block; width: 100%; }
+    .buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      width: 100%;
+      max-width: 380px;
+    }
+    button {
+      flex: 1;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #btn-confirm {
+      background: var(--tg-theme-button-color, #2196F3);
+      color: var(--tg-theme-button-text-color, #fff);
+    }
+    #btn-clear {
+      background: #eee;
+      color: #555;
+    }
+    #hint {
+      margin-top: 12px;
+      font-size: 12px;
+      color: #e55;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+  <h2>وقّع بإصبعك</h2>
+  <p>ارسم توقيعك في المساحة البيضاء أدناه</p>
+
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <div class="buttons">
+    <button id="btn-clear" onclick="clearPad()">مسح</button>
+    <button id="btn-confirm" onclick="submitSignature()">✓ تأكيد</button>
+  </div>
+  <div id="hint"></div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const wrap = document.getElementById('canvas-wrap');
+    let drawing = false;
+    let hasStrokes = false;
+
+    function resizeCanvas() {
+      const w = wrap.clientWidth;
+      const h = Math.round(w * 0.45);
+      canvas.width = w;
+      canvas.height = h;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      return { x: (src.clientX - r.left) * (canvas.width / r.width),
+               y: (src.clientY - r.top)  * (canvas.height / r.height) };
+    }
+
+    function startDraw(e) {
+      e.preventDefault();
+      drawing = true;
+      ctx.beginPath();
+      const p = pos(e);
+      ctx.moveTo(p.x, p.y);
+    }
+    function draw(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const p = pos(e);
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#111';
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      hasStrokes = true;
+    }
+    function stopDraw() { drawing = false; }
+
+    canvas.addEventListener('mousedown',  startDraw);
+    canvas.addEventListener('mousemove',  draw);
+    canvas.addEventListener('mouseup',    stopDraw);
+    canvas.addEventListener('mouseleave', stopDraw);
+    canvas.addEventListener('touchstart', startDraw, { passive: false });
+    canvas.addEventListener('touchmove',  draw,      { passive: false });
+    canvas.addEventListener('touchend',   stopDraw);
+
+    function clearPad() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      hasStrokes = false;
+      document.getElementById('hint').textContent = '';
+    }
+
+    function submitSignature() {
+      if (!hasStrokes) {
+        document.getElementById('hint').textContent = 'الرجاء رسم توقيعك أولاً';
+        return;
+      }
+      const data = canvas.toDataURL('image/png');
+      Telegram.WebApp.sendData(data);
+    }
+  </script>
+</body>
+</html>
