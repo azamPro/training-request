@@ -17,7 +17,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
 import arabic_reshaper
 from bidi.algorithm import get_display
@@ -48,11 +48,11 @@ FONT_NAME_BOLD = "AmiriBold"
 # ──────────────────────────────────────────────────────────────────────────
 FIELDS: dict[str, dict] = {
     # Student data table — row 1
-    "full_name":           {"x": 452, "y": 671, "align": "right",  "size": 11},
-    "university_id":       {"x": 188, "y": 671, "align": "right",  "size": 11},
+    "full_name":           {"x": 452, "y": 676, "align": "right",  "size": 11},
+    "university_id":       {"x": 155, "y": 676, "align": "right",  "size": 11},
     # Student data table — row 2
-    "department":          {"x": 466, "y": 653, "align": "right",  "size": 11},
-    "remaining_hours":     {"x": 148, "y": 653, "align": "right",  "size": 11},
+    "department":          {"x": 455, "y": 656, "align": "right",  "size": 11},
+    "remaining_hours":     {"x": 148, "y": 656, "align": "right",  "size": 11},
     # Company name — first dashed line under the request sentence
     "company_name":        {"x": 540, "y": 584, "align": "right",  "size": 11, "bold": True},
     # Optional company description — line below company name
@@ -99,6 +99,44 @@ def _draw_field(c: canvas.Canvas, key: str, value: str) -> None:
         c.drawCentredString(x, y, text)
     else:
         c.drawString(x, y, text)
+
+
+def _wrap_words(text: str, font: str, size: int, max_width: int) -> List[str]:
+    """Split text into lines that fit within max_width pts."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    words = text.split()
+    lines: List[str] = []
+    current: List[str] = []
+    for word in words:
+        candidate = " ".join(current + [word])
+        if stringWidth(_ar(candidate), font, size) <= max_width:
+            current.append(word)
+        else:
+            if current:
+                lines.append(" ".join(current))
+            current = [word]
+    if current:
+        lines.append(" ".join(current))
+    return lines or [text]
+
+
+def _draw_wrapped_field(c: canvas.Canvas, key: str, value: str, max_width: int = 450) -> None:
+    """Draw text with automatic word wrapping, lines going downward."""
+    cfg = FIELDS[key]
+    font = FONT_NAME_BOLD if cfg.get("bold") else FONT_NAME
+    size = cfg["size"]
+    c.setFont(font, size)
+    x, y, align = cfg["x"], cfg["y"], cfg["align"]
+    line_height = size + 3
+    for i, line in enumerate(_wrap_words(value, font, size, max_width)):
+        shaped = _ar(line)
+        draw_y = y - i * line_height
+        if align == "right":
+            c.drawRightString(x, draw_y, shaped)
+        elif align == "center":
+            c.drawCentredString(x, draw_y, shaped)
+        else:
+            c.drawString(x, draw_y, shaped)
 
 
 def _draw_signature_image(c: canvas.Canvas, image_path: str) -> None:
@@ -148,7 +186,7 @@ def _build_overlay(data: FormData) -> io.BytesIO:
     _draw_field(c, "company_name",    data.company_name)
 
     if data.company_description:
-        _draw_field(c, "company_description", data.company_description)
+        _draw_wrapped_field(c, "company_description", data.company_description)
 
     if data.signature_image_path and os.path.exists(data.signature_image_path):
         _draw_signature_image(c, data.signature_image_path)

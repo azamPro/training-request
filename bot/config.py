@@ -5,6 +5,7 @@ load_dotenv()
 
 TELEGRAM_BOT_TOKEN: str = os.environ["TELEGRAM_BOT_TOKEN"]
 ADMIN_TELEGRAM_USERNAME: str = os.getenv("ADMIN_TELEGRAM_USERNAME", "")
+ADMIN_TELEGRAM_ID: int = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 
 DB_HOST: str = os.environ["DB_HOST"]
 DB_PORT: int = int(os.getenv("DB_PORT", "3306"))
