@@ -36,6 +36,7 @@ class TrainingRequest(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     company_name = Column(String(200), nullable=False)
+    company_description = Column(String(500), nullable=True)
     pdf_path = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
