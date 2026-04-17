@@ -8,7 +8,6 @@ Entry points:
 For editing existing data use /edit (handled in edit.py).
 """
 
-import base64
 import os
 from telegram import (
     Update,
@@ -28,7 +27,7 @@ from telegram.ext import (
 from bot.database.db import get_db
 from bot.database.models import User
 from bot.config import GENERATED_PDF_DIR, WEBAPP_URL
-from bot.utils import arabic_to_western, main_menu_keyboard
+from bot.utils import arabic_to_western, main_menu_keyboard, decode_webapp_image
 
 REG_NAME, REG_UNI_ID, REG_DEPT, REG_HOURS, REG_SIG = range(5)
 
@@ -132,18 +131,17 @@ async def reg_hours(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def reg_sig_webapp(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    data = update.message.web_app_data.data
-    prefix = "data:image/png;base64,"
-    if not data.startswith(prefix):
+    result = decode_webapp_image(update.message.web_app_data.data)
+    if result is None:
         await update.message.reply_text("⚠️ بيانات التوقيع غير صالحة. حاول مرة أخرى.")
         return REG_SIG
 
-    img_bytes = base64.b64decode(data[len(prefix):])
+    img_bytes, ext = result
     sig_dir = os.path.join(GENERATED_PDF_DIR, "signatures")
     os.makedirs(sig_dir, exist_ok=True)
 
     tg_id = update.effective_user.id
-    sig_path = os.path.join(sig_dir, f"{tg_id}_sig.png")
+    sig_path = os.path.join(sig_dir, f"{tg_id}_sig{ext}")
     with open(sig_path, "wb") as f:
         f.write(img_bytes)
     context.user_data["signature_path"] = sig_path
