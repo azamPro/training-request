@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 
 from bot.config import ADMIN_TELEGRAM_USERNAME
 from bot.utils import COMMANDS_LIST, main_menu_keyboard
+from bot.handlers.start import profile_command, history_command
 
 _HELP_FULL = (
     "ℹ️ *بوت طلب التدريب الصيفي*\n\n"
@@ -38,14 +39,18 @@ async def handle_dotslash(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     text = (update.message.text or "").strip().lower()
     sub = text[2:].strip()
 
-    if sub == "help":
+    if sub in ("help", "h"):
         await update.message.reply_text(
             _HELP_FULL.format(commands=COMMANDS_LIST, admin=ADMIN_TELEGRAM_USERNAME),
             parse_mode="Markdown",
             reply_markup=main_menu_keyboard(),
         )
+    elif sub in ("profile", "p"):
+        await profile_command(update, context)
+    elif sub in ("history", "hist"):
+        await history_command(update, context)
     else:
-        # ./ with anything else → show commands list
+        # ./ alone or unrecognised sub-command → show commands list
         await update.message.reply_text(
             COMMANDS_LIST,
             parse_mode="Markdown",

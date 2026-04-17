@@ -56,20 +56,22 @@ async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     with get_db() as db:
         user = db.query(User).filter(User.telegram_id == tg_id).first()
-
-    if not user:
-        await update.callback_query.message.reply_text(NOT_REGISTERED)
-        return
-
-    sig = "✅ محفوظ" if user.signature_path else "—"
-    reg_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "—"
+        if not user:
+            await update.callback_query.message.reply_text(NOT_REGISTERED)
+            return
+        sig = "✅ محفوظ" if user.signature_path else "—"
+        reg_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "—"
+        full_name = user.full_name
+        university_id = user.university_id
+        department = user.department
+        remaining_hours = user.remaining_hours
 
     await update.callback_query.message.reply_text(
         f"👤 *ملفك الشخصي*\n\n"
-        f"الاسم: {user.full_name}\n"
-        f"الرقم الجامعي: `{user.university_id}`\n"
-        f"القسم: {user.department}\n"
-        f"الساعات المتبقية: {user.remaining_hours}\n"
+        f"الاسم: {full_name}\n"
+        f"الرقم الجامعي: `{university_id}`\n"
+        f"القسم: {department}\n"
+        f"الساعات المتبقية: {remaining_hours}\n"
         f"التوقيع: {sig}\n"
         f"تاريخ التسجيل: {reg_date}",
         parse_mode="Markdown",
@@ -82,20 +84,22 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     with get_db() as db:
         user = db.query(User).filter(User.telegram_id == tg_id).first()
-
-    if not user:
-        await update.message.reply_text(NOT_REGISTERED)
-        return
-
-    sig = "✅ محفوظ" if user.signature_path else "—"
-    reg_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "—"
+        if not user:
+            await update.message.reply_text(NOT_REGISTERED)
+            return
+        sig = "✅ محفوظ" if user.signature_path else "—"
+        reg_date = user.created_at.strftime("%Y-%m-%d") if user.created_at else "—"
+        full_name = user.full_name
+        university_id = user.university_id
+        department = user.department
+        remaining_hours = user.remaining_hours
 
     await update.message.reply_text(
         f"👤 *ملفك الشخصي*\n\n"
-        f"الاسم: {user.full_name}\n"
-        f"الرقم الجامعي: `{user.university_id}`\n"
-        f"القسم: {user.department}\n"
-        f"الساعات المتبقية: {user.remaining_hours}\n"
+        f"الاسم: {full_name}\n"
+        f"الرقم الجامعي: `{university_id}`\n"
+        f"القسم: {department}\n"
+        f"الساعات المتبقية: {remaining_hours}\n"
         f"التوقيع: {sig}\n"
         f"تاريخ التسجيل: {reg_date}",
         parse_mode="Markdown",

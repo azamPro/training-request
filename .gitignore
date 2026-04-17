@@ -2,6 +2,9 @@
 .env
 *.env
 
+# ── Claude context (local only) ───────────────────────────────────────────
+CLAUDE.md
+
 # ── Runtime data (never commit user data or generated files) ──────────────
 data/
 

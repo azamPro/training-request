@@ -53,7 +53,7 @@ FIELDS: dict[str, dict] = {
     "department":      {"x": 466, "y": 653, "align": "right",  "size": 11},
     "remaining_hours": {"x": 148, "y": 653, "align": "right",  "size": 11},
     # Company name — first dashed line under the request sentence
-    "company_name":    {"x": 540, "y": 573, "align": "right",  "size": 11},
+    "company_name":    {"x": 540, "y": 582, "align": "right",  "size": 11, "bold": True},
     # Signature — left blank (student signs by hand); field kept for future image embedding
     "signature":       {"x": 280, "y": 435, "align": "right",  "size": 10},
     # Hijri date — format: التاريخ: [day] / [month] / 14[year] هـ
