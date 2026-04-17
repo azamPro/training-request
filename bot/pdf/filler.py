@@ -58,7 +58,7 @@ FIELDS: dict[str, dict] = {
     # Optional company description — line below company name
     "company_description": {"x": 540, "y": 566, "align": "right",  "size": 10},
     # Signature — image embedded if available; field kept for text fallback
-    "signature":           {"x": 280, "y": 405, "align": "right",  "size": 10},
+    "signature":           {"x": 213, "y": 435, "align": "right",  "size": 10},
     # Hijri date — format: التاريخ: [day] / [month] / 14[year] هـ
     "date_day":            {"x": 112, "y": 435, "align": "center", "size": 10, "bold": True},
     "date_month":          {"x": 95,  "y": 435, "align": "center", "size": 10, "bold": True},
