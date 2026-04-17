@@ -18,4 +18,6 @@ jobs:
             cd /opt/training-form
             git pull origin main
             docker compose up --build -d
+            # Sync signature WebApp HTML
+            cp webapp/signature.html /opt/training-webapp/html/signature.html
             echo "Deploy done at $(date)"
