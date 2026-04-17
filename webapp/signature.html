@@ -138,7 +138,19 @@
         document.getElementById('hint').textContent = 'الرجاء رسم توقيعك أولاً';
         return;
       }
-      const data = canvas.toDataURL('image/png');
+      // Resize to 200×90 and encode as JPEG — keeps data under Telegram's 4096-byte sendData limit
+      const small = document.createElement('canvas');
+      small.width = 200;
+      small.height = 90;
+      const sc = small.getContext('2d');
+      sc.fillStyle = '#ffffff';
+      sc.fillRect(0, 0, 200, 90);
+      sc.drawImage(canvas, 0, 0, 200, 90);
+      const data = small.toDataURL('image/jpeg', 0.25);
+      if (data.length > 4090) {
+        document.getElementById('hint').textContent = 'التوقيع كبير جداً، رسم أبسط من فضلك';
+        return;
+      }
       Telegram.WebApp.sendData(data);
     }
   </script>

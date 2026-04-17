@@ -85,7 +85,14 @@ async def reg_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def reg_uni_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["university_id"] = arabic_to_western(update.message.text.strip())
+    raw = arabic_to_western(update.message.text.strip())
+    if not (raw.isdigit() and len(raw) == 9):
+        await update.message.reply_text(
+            "⚠️ الرقم الجامعي يجب أن يكون *9 أرقام* فقط — مثال: `432111217`",
+            parse_mode="Markdown",
+        )
+        return REG_UNI_ID
+    context.user_data["university_id"] = raw
     await update.message.reply_text(
         "📝 *الخطوة 3 من 5*\n\nأدخل *اسم قسمك:*\n_مثال: علوم الحاسب، تقنية المعلومات_",
         parse_mode="Markdown",
