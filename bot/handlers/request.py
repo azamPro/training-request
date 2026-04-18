@@ -7,9 +7,6 @@ Entry points:
   cb_request inline button
 """
 
-import os
-from datetime import datetime
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes,
@@ -20,10 +17,10 @@ from telegram.ext import (
     filters,
 )
 
-from bot.database.db import get_db
+from bot.database.db import get_db, log_event
 from bot.database.models import User, TrainingRequest
 from bot.pdf.filler import FormData, fill_form_to_bytes
-from bot.config import GENERATED_PDF_DIR
+from bot.storage import save_pdf
 from bot.utils import NOT_REGISTERED, main_menu_keyboard
 
 REQ_COMPANY, REQ_DESC = range(2)
@@ -127,12 +124,8 @@ async def _generate_and_send(
             db.add(req)
             db.flush()
 
-            filename = f"{tg_id}_{req.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-            pdf_path = os.path.join(GENERATED_PDF_DIR, filename)
-            os.makedirs(GENERATED_PDF_DIR, exist_ok=True)
-            with open(pdf_path, "wb") as f:
-                f.write(pdf_bytes)
-            req.pdf_path = pdf_path
+            req.pdf_path = save_pdf(pdf_bytes, tg_id, req.id)
+            log_event(tg_id, "request", company_name)
 
         caption = f"✅ *تم إنشاء طلب التدريب*\n\nالشركة: {company_name}\n"
         if company_description:

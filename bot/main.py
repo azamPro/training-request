@@ -1,5 +1,7 @@
 import logging
+import os
 import warnings
+from logging.handlers import RotatingFileHandler
 
 from telegram.warnings import PTBUserWarning
 
@@ -18,7 +20,7 @@ from telegram.ext import (
 )
 
 from bot.config import TELEGRAM_BOT_TOKEN, ADMIN_TELEGRAM_ID
-from bot.database.db import init_db
+from bot.database.db import init_db, log_event
 from bot.handlers.start import (
     start_handler,
     main_menu_callback,
@@ -35,9 +37,22 @@ from bot.handlers.help import help_handler, help_callback, handle_dotslash
 from bot.handlers.error_report import error_report_conv_handler, skip_error_cb
 from bot.handlers.admin import admin_handler
 
+_LOG_DIR = os.getenv("LOG_DIR", "/app/logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+
+_fmt = logging.Formatter("%(asctime)s — %(name)s — %(levelname)s — %(message)s")
+_file_handler = RotatingFileHandler(
+    os.path.join(_LOG_DIR, "bot.log"),
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(_fmt)
+
 logging.basicConfig(
     format="%(asctime)s — %(name)s — %(levelname)s — %(message)s",
     level=logging.INFO,
+    handlers=[logging.StreamHandler(), _file_handler],
 )
 logger = logging.getLogger(__name__)
 
@@ -52,6 +67,9 @@ _REPORT_KB = InlineKeyboardMarkup([
 
 async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled exception:", exc_info=context.error)
+
+    if isinstance(update, Update) and update.effective_user:
+        log_event(update.effective_user.id, "error", str(context.error)[:500])
 
     if ADMIN_TELEGRAM_ID:
         admin_msg = (

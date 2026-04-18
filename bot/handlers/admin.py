@@ -11,9 +11,9 @@ from telegram.ext import ContextTypes
 
 from telegram.helpers import escape_markdown
 
-from bot.config import ADMIN_TELEGRAM_ID
+from bot.config import ADMIN_TELEGRAM_ID, USE_S3, AWS_S3_BUCKET, AWS_REGION
 from bot.database.db import get_db
-from bot.database.models import TrainingRequest, User
+from bot.database.models import BotEvent, TrainingRequest, User
 
 
 def _esc(text: str) -> str:
@@ -72,6 +72,36 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .all()
         )
 
+        active_today = (
+            db.query(func.count(func.distinct(BotEvent.telegram_id)))
+            .filter(func.date(BotEvent.created_at) == today)
+            .scalar() or 0
+        )
+
+        recent_errors = (
+            db.query(BotEvent.telegram_id, BotEvent.payload, BotEvent.created_at)
+            .filter(BotEvent.event_type == "error")
+            .order_by(BotEvent.created_at.desc())
+            .limit(3)
+            .all()
+        )
+
+        pdfs_on_s3 = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.like("s3://%"))
+            .scalar() or 0
+        )
+        pdfs_on_local = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.notlike("s3://%"), TrainingRequest.pdf_path.isnot(None))
+            .scalar() or 0
+        )
+        pdfs_no_path = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.is_(None))
+            .scalar() or 0
+        )
+
     avg_req = round(total_requests / total_users, 1) if total_users else 0
 
     companies_text = "\n".join(
@@ -87,12 +117,23 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         for name, uname, dt in latest_users
     ) or "  —"
 
+    errors_text = "\n".join(
+        f"  • `{tid}` — {_esc((payload or '')[:60])} ({dt.strftime('%m-%d %H:%M') if dt else '—'})"
+        for tid, payload, dt in recent_errors
+    ) or "  لا توجد أخطاء"
+
+    storage_mode = f"S3 (`{AWS_S3_BUCKET}` / `{AWS_REGION}`)" if USE_S3 else "Local disk"
+    storage_text = (
+        f"  الوضع: {storage_mode}\n"
+        f"  في S3: {pdfs_on_s3} | محلي: {pdfs_on_local} | بدون مسار: {pdfs_no_path}"
+    )
+
     msg = (
         f"📊 *لوحة تحكم المسؤول*\n"
         f"🕐 {now.strftime('%Y-%m-%d %H:%M')} UTC\n\n"
         f"👥 *المستخدمون*\n"
-        f"  الإجمالي: *{total_users}*\n"
-        f"  اليوم: {users_today} | الأسبوع: {users_week} | الشهر: {users_month}\n"
+        f"  الإجمالي: *{total_users}* | نشطون اليوم: {active_today}\n"
+        f"  جدد — اليوم: {users_today} | الأسبوع: {users_week} | الشهر: {users_month}\n"
         f"  بتوقيع محفوظ: {with_sig}/{total_users}\n\n"
         f"📄 *الطلبات*\n"
         f"  الإجمالي: *{total_requests}*\n"
@@ -100,7 +141,9 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"  متوسط لكل مستخدم: {avg_req}\n\n"
         f"🏢 *أكثر الشركات طلباً*\n{companies_text}\n\n"
         f"🏆 *أكثر المستخدمين نشاطاً*\n{top_users_text}\n\n"
-        f"🆕 *آخر التسجيلات*\n{latest_text}"
+        f"🆕 *آخر التسجيلات*\n{latest_text}\n\n"
+        f"🗄 *التخزين*\n{storage_text}\n\n"
+        f"🚨 *آخر الأخطاء*\n{errors_text}"
     )
 
     await update.message.reply_text(msg, parse_mode="Markdown")

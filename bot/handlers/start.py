@@ -1,7 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.database.db import get_db
+from bot.database.db import get_db, log_event
 from bot.database.models import User, TrainingRequest
 from bot.utils import (
     WELCOME_NEW, MAIN_MENU, NOT_REGISTERED,
@@ -11,6 +11,7 @@ from bot.utils import (
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     tg_id = update.effective_user.id
+    log_event(tg_id, "start")
 
     with get_db() as db:
         user = db.query(User).filter(User.telegram_id == tg_id).first()
