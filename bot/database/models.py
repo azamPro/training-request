@@ -1,4 +1,3 @@
-from datetime import datetime
 from sqlalchemy import (
     Column, Integer, BigInteger, String, Text,
     DateTime, ForeignKey, func
@@ -44,3 +43,16 @@ class TrainingRequest(Base):
 
     def __repr__(self) -> str:
         return f"<TrainingRequest id={self.id} company={self.company_name}>"
+
+
+class BotEvent(Base):
+    __tablename__ = "bot_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(BigInteger, nullable=False, index=True)
+    event_type = Column(String(50), nullable=False, index=True)
+    payload = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), index=True)
+
+    def __repr__(self) -> str:
+        return f"<BotEvent telegram_id={self.telegram_id} type={self.event_type}>"

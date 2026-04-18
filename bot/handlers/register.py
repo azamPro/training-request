@@ -24,7 +24,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.database.db import get_db
+from bot.database.db import get_db, log_event
 from bot.database.models import User
 from bot.config import GENERATED_PDF_DIR, WEBAPP_URL
 from bot.utils import arabic_to_western, main_menu_keyboard, decode_webapp_image
@@ -198,6 +198,7 @@ async def _save_user(
             if d.get("signature_path") is not None:
                 user.signature_path = d["signature_path"]
             verb = "تحديث"
+            log_event(tg_id, "re_register")
         else:
             user = User(
                 telegram_id       = tg_id,
@@ -210,6 +211,7 @@ async def _save_user(
             )
             db.add(user)
             verb = "حفظ"
+            log_event(tg_id, "register")
 
     success_msg = (
         f"✅ *تم {verb} بياناتك بنجاح!*\n\n"

@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.database.db import get_db
+from bot.database.db import get_db, log_event
 from bot.database.models import User
 from bot.config import GENERATED_PDF_DIR, WEBAPP_URL
 from bot.utils import arabic_to_western, main_menu_keyboard, NOT_REGISTERED, decode_webapp_image
@@ -212,6 +212,7 @@ async def _save_field(
         else:
             setattr(user, field, value)
             display = f"✅ تم تحديث *{_FIELD_LABELS[field]}* إلى:\n`{value}`"
+        log_event(tg_id, "edit", field)
 
     context.user_data.clear()
     await update.message.reply_text(
