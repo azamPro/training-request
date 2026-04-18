@@ -11,7 +11,7 @@ from telegram.ext import ContextTypes
 
 from telegram.helpers import escape_markdown
 
-from bot.config import ADMIN_TELEGRAM_ID
+from bot.config import ADMIN_TELEGRAM_ID, USE_S3, AWS_S3_BUCKET, AWS_REGION
 from bot.database.db import get_db
 from bot.database.models import BotEvent, TrainingRequest, User
 
@@ -86,6 +86,22 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .all()
         )
 
+        pdfs_on_s3 = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.like("s3://%"))
+            .scalar() or 0
+        )
+        pdfs_on_local = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.notlike("s3://%"), TrainingRequest.pdf_path.isnot(None))
+            .scalar() or 0
+        )
+        pdfs_no_path = (
+            db.query(func.count(TrainingRequest.id))
+            .filter(TrainingRequest.pdf_path.is_(None))
+            .scalar() or 0
+        )
+
     avg_req = round(total_requests / total_users, 1) if total_users else 0
 
     companies_text = "\n".join(
@@ -106,6 +122,12 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         for tid, payload, dt in recent_errors
     ) or "  لا توجد أخطاء"
 
+    storage_mode = f"S3 (`{AWS_S3_BUCKET}` / `{AWS_REGION}`)" if USE_S3 else "Local disk"
+    storage_text = (
+        f"  الوضع: {storage_mode}\n"
+        f"  في S3: {pdfs_on_s3} | محلي: {pdfs_on_local} | بدون مسار: {pdfs_no_path}"
+    )
+
     msg = (
         f"📊 *لوحة تحكم المسؤول*\n"
         f"🕐 {now.strftime('%Y-%m-%d %H:%M')} UTC\n\n"
@@ -120,6 +142,7 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"🏢 *أكثر الشركات طلباً*\n{companies_text}\n\n"
         f"🏆 *أكثر المستخدمين نشاطاً*\n{top_users_text}\n\n"
         f"🆕 *آخر التسجيلات*\n{latest_text}\n\n"
+        f"🗄 *التخزين*\n{storage_text}\n\n"
         f"🚨 *آخر الأخطاء*\n{errors_text}"
     )
 
