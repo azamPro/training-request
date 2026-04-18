@@ -33,6 +33,7 @@ from bot.handlers.edit import edit_conv_handler
 from bot.handlers.request import request_conv_handler
 from bot.handlers.help import help_handler, help_callback, handle_dotslash
 from bot.handlers.error_report import error_report_conv_handler, skip_error_cb
+from bot.handlers.admin import admin_handler
 
 logging.basicConfig(
     format="%(asctime)s — %(name)s — %(levelname)s — %(message)s",
@@ -104,6 +105,7 @@ def main() -> None:
     app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("help",    help_handler))
+    app.add_handler(CommandHandler("admin",   admin_handler))
 
     # ── Inline button callbacks ───────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^cb_main$"))
