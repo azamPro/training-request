@@ -20,7 +20,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.database.db import get_db
+from bot.database.db import get_db, log_event
 from bot.database.models import User, TrainingRequest
 from bot.pdf.filler import FormData, fill_form_to_bytes
 from bot.config import GENERATED_PDF_DIR
@@ -133,6 +133,7 @@ async def _generate_and_send(
             with open(pdf_path, "wb") as f:
                 f.write(pdf_bytes)
             req.pdf_path = pdf_path
+            log_event(tg_id, "request", company_name)
 
         caption = f"✅ *تم إنشاء طلب التدريب*\n\nالشركة: {company_name}\n"
         if company_description:

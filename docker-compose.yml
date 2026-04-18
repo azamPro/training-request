@@ -6,6 +6,7 @@ services:
     env_file: .env
     volumes:
       - ./data:/app/data          # persist generated PDFs and signatures
+      - ./logs:/app/logs          # persist rotating log files
     environment:
       - PYTHONUNBUFFERED=1
     # No ports needed — bot uses long polling

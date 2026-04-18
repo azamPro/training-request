@@ -13,7 +13,7 @@ from telegram.helpers import escape_markdown
 
 from bot.config import ADMIN_TELEGRAM_ID
 from bot.database.db import get_db
-from bot.database.models import TrainingRequest, User
+from bot.database.models import BotEvent, TrainingRequest, User
 
 
 def _esc(text: str) -> str:
@@ -72,6 +72,20 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             .all()
         )
 
+        active_today = (
+            db.query(func.count(func.distinct(BotEvent.telegram_id)))
+            .filter(func.date(BotEvent.created_at) == today)
+            .scalar() or 0
+        )
+
+        recent_errors = (
+            db.query(BotEvent.telegram_id, BotEvent.payload, BotEvent.created_at)
+            .filter(BotEvent.event_type == "error")
+            .order_by(BotEvent.created_at.desc())
+            .limit(3)
+            .all()
+        )
+
     avg_req = round(total_requests / total_users, 1) if total_users else 0
 
     companies_text = "\n".join(
@@ -87,12 +101,17 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         for name, uname, dt in latest_users
     ) or "  —"
 
+    errors_text = "\n".join(
+        f"  • `{tid}` — {_esc((payload or '')[:60])} ({dt.strftime('%m-%d %H:%M') if dt else '—'})"
+        for tid, payload, dt in recent_errors
+    ) or "  لا توجد أخطاء"
+
     msg = (
         f"📊 *لوحة تحكم المسؤول*\n"
         f"🕐 {now.strftime('%Y-%m-%d %H:%M')} UTC\n\n"
         f"👥 *المستخدمون*\n"
-        f"  الإجمالي: *{total_users}*\n"
-        f"  اليوم: {users_today} | الأسبوع: {users_week} | الشهر: {users_month}\n"
+        f"  الإجمالي: *{total_users}* | نشطون اليوم: {active_today}\n"
+        f"  جدد — اليوم: {users_today} | الأسبوع: {users_week} | الشهر: {users_month}\n"
         f"  بتوقيع محفوظ: {with_sig}/{total_users}\n\n"
         f"📄 *الطلبات*\n"
         f"  الإجمالي: *{total_requests}*\n"
@@ -100,7 +119,8 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"  متوسط لكل مستخدم: {avg_req}\n\n"
         f"🏢 *أكثر الشركات طلباً*\n{companies_text}\n\n"
         f"🏆 *أكثر المستخدمين نشاطاً*\n{top_users_text}\n\n"
-        f"🆕 *آخر التسجيلات*\n{latest_text}"
+        f"🆕 *آخر التسجيلات*\n{latest_text}\n\n"
+        f"🚨 *آخر الأخطاء*\n{errors_text}"
     )
 
     await update.message.reply_text(msg, parse_mode="Markdown")
