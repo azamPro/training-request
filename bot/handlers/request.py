@@ -170,11 +170,11 @@ request_conv_handler = ConversationHandler(
     ],
     states={
         REQ_COMPANY: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, req_company),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, req_company),
             _stay(REQ_COMPANY),
         ],
         REQ_DESC: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, req_desc),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, req_desc),
             CallbackQueryHandler(req_desc_skip, pattern="^skip_desc$"),
         ],
     },
