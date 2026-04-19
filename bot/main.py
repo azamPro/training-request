@@ -138,7 +138,7 @@ def main() -> None:
 
     # ── Unknown text messages → show main menu ────────────────────────────────
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, unknown_handler)
+        MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, unknown_handler)
     )
 
     # ── Error report skip button ─────────────────────────────────────────────
