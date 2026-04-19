@@ -256,25 +256,25 @@ register_conv_handler = ConversationHandler(
     ],
     states={
         REG_NAME: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, reg_name),
             _stay(REG_NAME),
         ],
         REG_UNI_ID: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_uni_id),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, reg_uni_id),
             _stay(REG_UNI_ID),
         ],
         REG_DEPT: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_dept),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, reg_dept),
             _stay(REG_DEPT),
         ],
         REG_HOURS: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, reg_hours),
+            MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, reg_hours),
             _stay(REG_HOURS),
         ],
         REG_SIG: [
             MessageHandler(filters.StatusUpdate.WEB_APP_DATA, reg_sig_webapp),
-            MessageHandler(filters.PHOTO, reg_sig_photo),
-            MessageHandler(filters.TEXT & filters.Regex(r"^⏭"), reg_sig_skip_text),
+            MessageHandler(filters.PHOTO & filters.UpdateType.MESSAGE, reg_sig_photo),
+            MessageHandler(filters.TEXT & filters.Regex(r"^⏭") & filters.UpdateType.MESSAGE, reg_sig_skip_text),
             CallbackQueryHandler(reg_sig_skip_cb, pattern="^skip_sig$"),
             _stay(REG_SIG),
         ],
