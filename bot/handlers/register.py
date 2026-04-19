@@ -88,7 +88,7 @@ async def reg_uni_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     raw = arabic_to_western(update.message.text.strip())
     if not (raw.isdigit() and len(raw) == 9):
         await update.message.reply_text(
-            "⚠️ الرقم الجامعي يجب أن يكون *9 أرقام* فقط — مثال: `432111217`",
+            "⚠️ الرقم الجامعي يجب أن يكون *9 أرقام* فقط — مثال: `432198765`",
             parse_mode="Markdown",
         )
         return REG_UNI_ID
