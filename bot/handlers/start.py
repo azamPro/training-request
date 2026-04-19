@@ -179,6 +179,9 @@ async def history_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def unknown_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch all unrecognised messages and show the main menu."""
+    if not update.message:
+        return
+
     tg_id = update.effective_user.id
 
     with get_db() as db:
