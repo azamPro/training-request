@@ -1,12 +1,11 @@
 """
-Admin-only analytics command: /admin
-Shows live stats about users, requests, companies, and activity trends.
+Admin-only commands: /admin (analytics) and /admin_errors (error log with delete).
 """
 
 from datetime import datetime, timedelta
 
 from sqlalchemy import func
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from telegram.helpers import escape_markdown
@@ -147,3 +146,69 @@ async def admin_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     )
 
     await update.message.reply_text(msg, parse_mode="Markdown")
+
+
+# ── Error log (/admin_errors) ─────────────────────────────────────────────────
+
+def _fetch_errors() -> list:
+    with get_db() as db:
+        return (
+            db.query(BotEvent.id, BotEvent.telegram_id, BotEvent.payload, BotEvent.created_at)
+            .filter(BotEvent.event_type == "error")
+            .order_by(BotEvent.created_at.desc())
+            .limit(5)
+            .all()
+        )
+
+
+def _build_errors_message(errors: list) -> tuple:
+    if not errors:
+        return "✅ لا توجد أخطاء مسجلة.", InlineKeyboardMarkup([])
+
+    lines = ["🚨 *سجل الأخطاء* — آخر 5 أخطاء\n"]
+    btn_rows = []
+
+    for i, (err_id, tid, payload, created_at) in enumerate(errors, 1):
+        dt_str = created_at.strftime("%Y-%m-%d %H:%M:%S") if created_at else "—"
+        payload_text = _esc((payload or "—")[:300])
+        lines.append(
+            f"*{i}.* 🕐 `{dt_str}`\n"
+            f"   👤 `{tid}`\n"
+            f"   ❌ {payload_text}\n"
+        )
+        btn_rows.append([InlineKeyboardButton(f"🗑 حذف #{i}", callback_data=f"del_error_{err_id}")])
+
+    return "\n".join(lines), InlineKeyboardMarkup(btn_rows)
+
+
+async def admin_errors_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not _is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ هذا الأمر للمسؤول فقط.")
+        return
+
+    errors = _fetch_errors()
+    msg, kb = _build_errors_message(errors)
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=kb)
+
+
+async def delete_error_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+
+    if not _is_admin(update.effective_user.id):
+        await query.answer("❌ غير مصرح", show_alert=True)
+        return
+
+    await query.answer()
+
+    error_id = int(query.data[len("del_error_"):])
+    with get_db() as db:
+        err = db.query(BotEvent).filter(BotEvent.id == error_id).first()
+        if err:
+            db.delete(err)
+
+    errors = _fetch_errors()
+    msg, kb = _build_errors_message(errors)
+    try:
+        await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=kb)
+    except Exception:
+        pass

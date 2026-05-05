@@ -9,7 +9,9 @@ warnings.filterwarnings("ignore", category=PTBUserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pypdf")
 warnings.filterwarnings("ignore", message=".*ARC4.*")
 
+import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -35,7 +37,7 @@ from bot.handlers.edit import edit_conv_handler
 from bot.handlers.request import request_conv_handler
 from bot.handlers.help import help_handler, help_callback, handle_dotslash
 from bot.handlers.error_report import error_report_conv_handler, skip_error_cb
-from bot.handlers.admin import admin_handler
+from bot.handlers.admin import admin_handler, admin_errors_handler, delete_error_callback
 
 _LOG_DIR = os.getenv("LOG_DIR", "/app/logs")
 os.makedirs(_LOG_DIR, exist_ok=True)
@@ -66,15 +68,27 @@ _REPORT_KB = InlineKeyboardMarkup([
 
 
 async def _error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error("Unhandled exception:", exc_info=context.error)
+    err = context.error
+
+    # Transient network drop from Telegram's side — not actionable, skip alert
+    if isinstance(err, httpx.ReadError):
+        logger.warning("httpx.ReadError (transient): %s", err)
+        return
+
+    # Bot tried to edit a message that was deleted or is too old — skip alert
+    if isinstance(err, BadRequest) and "message to edit not found" in str(err).lower():
+        logger.warning("Stale edit target ignored: %s", err)
+        return
+
+    logger.error("Unhandled exception:", exc_info=err)
 
     if isinstance(update, Update) and update.effective_user:
-        log_event(update.effective_user.id, "error", str(context.error)[:500])
+        log_event(update.effective_user.id, "error", str(err)[:500])
 
     if ADMIN_TELEGRAM_ID:
         admin_msg = (
             f"🚨 *خطأ غير متوقع في البوت*\n\n"
-            f"`{str(context.error)[:600]}`"
+            f"`{str(err)[:600]}`"
         )
         try:
             await context.bot.send_message(ADMIN_TELEGRAM_ID, admin_msg, parse_mode="Markdown")
@@ -123,7 +137,8 @@ def main() -> None:
     app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("help",    help_handler))
-    app.add_handler(CommandHandler("admin",   admin_handler))
+    app.add_handler(CommandHandler("admin",        admin_handler))
+    app.add_handler(CommandHandler("admin_errors", admin_errors_handler))
 
     # ── Inline button callbacks ───────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^cb_main$"))
@@ -140,6 +155,9 @@ def main() -> None:
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND & filters.UpdateType.MESSAGE, unknown_handler)
     )
+
+    # ── Error log delete button ──────────────────────────────────────────────
+    app.add_handler(CallbackQueryHandler(delete_error_callback, pattern=r"^del_error_\d+$"))
 
     # ── Error report skip button ─────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(skip_error_cb, pattern="^skip_error$"))
