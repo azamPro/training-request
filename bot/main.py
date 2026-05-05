@@ -132,13 +132,18 @@ def main() -> None:
     app.add_handler(edit_conv_handler)
     app.add_handler(request_conv_handler)
 
+    # ── Admin commands in group -1 — bypass ConversationHandler state ────────
+    # Group -1 is processed before group 0 (where ConversationHandlers live).
+    # This ensures /admin and /admin_errors always work even if the admin is
+    # stuck mid-conversation (register/edit/request flow).
+    app.add_handler(CommandHandler("admin",        admin_handler),        group=-1)
+    app.add_handler(CommandHandler("admin_errors", admin_errors_handler), group=-1)
+
     # ── Commands ─────────────────────────────────────────────────────────────
     app.add_handler(CommandHandler("start",   start_handler))
     app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(CommandHandler("history", history_command))
     app.add_handler(CommandHandler("help",    help_handler))
-    app.add_handler(CommandHandler("admin",        admin_handler))
-    app.add_handler(CommandHandler("admin_errors", admin_errors_handler))
 
     # ── Inline button callbacks ───────────────────────────────────────────────
     app.add_handler(CallbackQueryHandler(main_menu_callback, pattern="^cb_main$"))
